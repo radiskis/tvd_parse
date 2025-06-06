@@ -102,9 +102,9 @@ def process_data_section(field: bytes, file_name, name):
             }, values
 
 FIRST_FILE_HEADER = b"TVD001"
-NAME_LENGTH = 20
+SECTION_NAME_LENGTH = 20
 
-def read_tvd_file(file_path: Path, write_output_file=False):
+def read_tvd_file(file_path: Path,  write_output_file: bool = False):
     logging.debug(f"Reading file {file_path.name}")
     file = open(file_path, "b+r")
     file.seek(0, 2)
@@ -128,7 +128,7 @@ def read_tvd_file(file_path: Path, write_output_file=False):
             break
         if section_position>file_size:
             raise ValueError(f"Read out of file bounds, {file_size=}, {section_position=}")
-        name = file.read(NAME_LENGTH)
+        name = file.read(SECTION_NAME_LENGTH)
         assert name.startswith(b"TVD"), f"Section {name=} should start with 'TVD'"
         data_section = False
         if name in [b'TVD_Reference_______', b'TVD_Current_________']:
@@ -149,11 +149,12 @@ def read_tvd_file(file_path: Path, write_output_file=False):
             logging.debug(f"Previous file: {previous_file}")
         if name == b'TVD_FilesCount______':
             section_length -= 0#1
-        file.seek(section_position + NAME_LENGTH + section_length + 4, os.SEEK_SET)
+            logging.debug("TVD_FilesCount______ value is " + str(binascii.b2a_hex(section_content, " ")))
+        file.seek(section_position + SECTION_NAME_LENGTH + section_length + 4, os.SEEK_SET)
         if name == b'TVD_NextFile________':
             next_file = section_content.decode().strip()
             logging.debug(f"Next file: {next_file}")
-            if next_file == "MEASUREMENT_NEEDS_RENAMING.tvd1": # probably default file name, should None
+            if next_file == "MEASUREMENT_NEEDS_RENAMING.tvd1": # probably default file name, should be None
                 next_file = None
             break
     if write_output_file: out_file.close()
@@ -196,10 +197,16 @@ def plot_file_coordinates(data):
         ax.plot(section_info["x"], section_info["y"], marker, label=label)
     ax.legend(loc='upper right')
 
-def read_tvd_files(file_path: Path):
+def read_tvd_files(file_path: Path, ignore_missing_files: bool = False):
     results = []
     while True:
-        sections, next_file = read_tvd_file(file_path)
+        try:
+            sections, next_file = read_tvd_file(file_path)
+        except FileNotFoundError:
+            if not ignore_missing_files:
+                raise
+            logging.warning(f"File not found but ignoring as requested: {file_path.name}")
+            break
         results.extend(sections)
         if next_file is None:
             break
