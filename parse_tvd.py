@@ -105,7 +105,7 @@ FIRST_FILE_HEADER = b"TVD001"
 SECTION_NAME_LENGTH = 20
 
 def read_tvd_file(file_path: Path,  write_output_file: bool = False):
-    logging.debug(f"Reading file {file_path.name}")
+    logging.info(f"Reading file {file_path.name}")
     file = open(file_path, "b+r")
     file.seek(0, 2)
     file_size = file.tell()
@@ -117,6 +117,7 @@ def read_tvd_file(file_path: Path,  write_output_file: bool = False):
         file.seek(0)
     else:
         assert file_header == FIRST_FILE_HEADER, f"Bad file header: {file_header} instead of {FIRST_FILE_HEADER}"
+        logging.debug(f"Correct file header: {file_header}.")
     #print(binascii.b2a_hex(bytes([i for i in range(140)]), " "))
     next_file = None
     previous_file = None
@@ -139,6 +140,9 @@ def read_tvd_file(file_path: Path,  write_output_file: bool = False):
         if data_section:
             section_info, values = process_data_section(section_content, file_path.name, name)
             sections.append([section_info, values])
+            logging.debug(f"Section DATA {name=}  {section_position=} {section_length=}")
+        else:
+            logging.debug(f"Section NOT_DATA {name=} {section_length=} content is '{section_content}'" + str(binascii.b2a_hex(section_content, " ")))
         #print(name, section_length)
         section_info = None
         if write_output_file: 
@@ -148,8 +152,12 @@ def read_tvd_file(file_path: Path,  write_output_file: bool = False):
             previous_file = section_content.decode().strip()
             logging.debug(f"Previous file: {previous_file}")
         if name == b'TVD_FilesCount______':
-            section_length -= 0#1
-            logging.debug("TVD_FilesCount______ value is " + str(binascii.b2a_hex(section_content, " ")))
+            section_length -= 0 #1
+            if b"TVD" in section_content:
+                logging.info(f"Different TVD_FilesCount section parsing!")
+                logging.info(f"FilesCount {section_length}")
+                section_length = 4 # special case if "TVD" is found in section_content
+            #logging.debug("TVD_FilesCount______ value is " + str(binascii.b2a_hex(section_content, " ")))
         file.seek(section_position + SECTION_NAME_LENGTH + section_length + 4, os.SEEK_SET)
         if name == b'TVD_NextFile________':
             next_file = section_content.decode().strip()
